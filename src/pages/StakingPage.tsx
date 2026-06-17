@@ -1,0 +1,1 @@
+export function StakingPage() { return (<div className="space-y-6"><h1 className="text-2xl font-bold text-white">StakingPage</h1><div className="card text-gray-400">Coming soon.</div></div>) }
