@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
+import { usePriceUpdater } from '@/hooks/usePriceUpdater'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { AuthLayout } from '@/components/layout/AuthLayout'
 import { LoginPage } from '@/pages/LoginPage'
@@ -46,38 +47,36 @@ function LoadingScreen() {
   )
 }
 
-export default function App() {
-  // Initialize auth once at app root
-  useAuth()
+function AppWithPrices() {
+  usePriceUpdater()
+  return (
+    <Routes>
+      <Route element={<AuthLayout />}>
+        <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
+        <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
+      </Route>
+      <Route element={<PrivateRoute><AppLayout /></PrivateRoute>}>
+        <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/trade" element={<TradingPage />} />
+        <Route path="/trade/:symbol" element={<TradingPage />} />
+        <Route path="/staking" element={<StakingPage />} />
+        <Route path="/swap" element={<SwapPage />} />
+        <Route path="/wallet" element={<WalletPage />} />
+        <Route path="/history" element={<HistoryPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
+      </Route>
+      <Route path="/admin/*" element={<AdminRoute><AdminPage /></AdminRoute>} />
+      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+    </Routes>
+  )
+}
 
+export default function App() {
+  useAuth()
   return (
     <BrowserRouter>
-      <Routes>
-        {/* Public auth routes */}
-        <Route element={<AuthLayout />}>
-          <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
-          <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
-        </Route>
-
-        {/* Protected app routes */}
-        <Route element={<PrivateRoute><AppLayout /></PrivateRoute>}>
-          <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/trade" element={<TradingPage />} />
-          <Route path="/trade/:symbol" element={<TradingPage />} />
-          <Route path="/staking" element={<StakingPage />} />
-          <Route path="/swap" element={<SwapPage />} />
-          <Route path="/wallet" element={<WalletPage />} />
-          <Route path="/history" element={<HistoryPage />} />
-          <Route path="/profile" element={<ProfilePage />} />
-        </Route>
-
-        {/* Admin routes */}
-        <Route path="/admin/*" element={<AdminRoute><AdminPage /></AdminRoute>} />
-
-        {/* Redirects */}
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
-      </Routes>
+      <AppWithPrices />
     </BrowserRouter>
   )
 }
