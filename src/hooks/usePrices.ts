@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { usePriceStore } from '@/stores/priceStore'
 import type { PriceFeed } from '@/types'
 
-// 🔥 GLOBAL STATE – This lives outside React, so it's shared across ALL components
+// 🔥 GLOBAL STATE – lives outside React, shared across ALL components
 let globalChannel: any = null
 let isGlobalSubscribed = false
 
@@ -12,7 +12,6 @@ export function usePrices() {
   const { prices, setPrices, updatePrice } = usePriceStore()
   const [isLoading, setIsLoading] = useState(true)
 
-  // 1. Fetch initial data (this runs once per component, but React Query caches it)
   const { data, isLoading: queryLoading } = useQuery({
     queryKey: ['price_feeds'],
     queryFn: async () => {
@@ -32,13 +31,10 @@ export function usePrices() {
     }
   }, [data])
 
-  // 2. Set up the REAL TIME channel – but ONLY ONCE globally
+  // Set up realtime channel ONCE globally — not per component
   useEffect(() => {
-    // ✅ If the global channel doesn't exist, create it
     if (!globalChannel) {
-      console.log('🔧 Creating global price channel...')
-
-      const channel = supabase
+      globalChannel = supabase
         .channel('price_feeds_realtime')
         .on(
           'postgres_changes',
@@ -47,28 +43,19 @@ export function usePrices() {
             updatePrice(payload.new as PriceFeed)
           }
         )
-
-      globalChannel = channel
     }
 
-    // ✅ If it's not subscribed yet, subscribe NOW (once)
     if (!isGlobalSubscribed) {
-      globalChannel.subscribe((status) => {
+      globalChannel.subscribe((status: string) => {
         if (status === 'SUBSCRIBED') {
-          console.log('✅ Global price channel subscribed')
           isGlobalSubscribed = true
         }
       })
     }
 
-    // ✅ Cleanup: We DO NOT remove the channel on unmount,
-    // because other components are still using it.
-    // The channel lives for the entire lifecycle of the app.
-    return () => {
-      // We intentionally do NOT remove the channel here.
-      // It stays alive for all components.
-    }
-  }, []) // Empty array = runs ONCE, when the FIRST component using this hook mounts
+    // Intentionally NO cleanup — channel stays alive for all components
+    return () => {}
+  }, [])
 
   return { prices, isLoading: isLoading || queryLoading }
 }
