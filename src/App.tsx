@@ -7,11 +7,13 @@ import { LoginPage } from '@/pages/LoginPage'
 import { RegisterPage } from '@/pages/RegisterPage'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { TradingPage } from '@/pages/TradingPage'
+import { BinaryPage } from '@/pages/BinaryPage'
 import { StakingPage } from '@/pages/StakingPage'
 import { SwapPage } from '@/pages/SwapPage'
 import { WalletPage } from '@/pages/WalletPage'
 import { HistoryPage } from '@/pages/HistoryPage'
 import { ProfilePage } from '@/pages/ProfilePage'
+import { ReferralPage } from '@/pages/ReferralPage'
 import { AdminPage } from '@/pages/AdminPage'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -59,11 +61,13 @@ function AppWithPrices() {
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/trade" element={<TradingPage />} />
         <Route path="/trade/:symbol" element={<TradingPage />} />
+        <Route path="/binary" element={<BinaryPage />} />
         <Route path="/staking" element={<StakingPage />} />
         <Route path="/swap" element={<SwapPage />} />
         <Route path="/wallet" element={<WalletPage />} />
         <Route path="/history" element={<HistoryPage />} />
         <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/referral" element={<ReferralPage />} />
       </Route>
       <Route path="/admin/*" element={<AdminRoute><AdminPage /></AdminRoute>} />
       <Route path="/" element={<Navigate to="/dashboard" replace />} />

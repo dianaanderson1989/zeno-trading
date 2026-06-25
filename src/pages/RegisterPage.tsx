@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -11,6 +11,7 @@ const schema = z.object({
   email: z.string().email('Invalid email'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
   confirm_password: z.string(),
+  referral_code: z.string().optional(),
 }).refine(d => d.password === d.confirm_password, {
   message: 'Passwords do not match',
   path: ['confirm_password'],
@@ -19,29 +20,60 @@ type FormData = z.infer<typeof schema>
 
 export function RegisterPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, setValue, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
   })
+
+  // Pre-fill referral code from URL
+  useEffect(() => {
+    const ref = searchParams.get('ref')
+    if (ref) setValue('referral_code', ref)
+  }, [searchParams])
 
   const onSubmit = async (data: FormData) => {
     setLoading(true)
     setError('')
-    const { error } = await supabase.auth.signUp({
+
+    // Resolve referrer if code provided
+    let referrerId: string | null = null
+    if (data.referral_code) {
+      const { data: referrer } = await supabase
+        .from('users')
+        .select('id')
+        .eq('referral_code', data.referral_code.toUpperCase())
+        .single()
+      if (referrer) referrerId = referrer.id
+    }
+
+    const { data: authData, error: authError } = await supabase.auth.signUp({
       email: data.email,
       password: data.password,
       options: {
-        data: { first_name: data.first_name, last_name: data.last_name },
+        data: {
+          first_name: data.first_name,
+          last_name: data.last_name,
+        },
       },
     })
-    if (error) {
-      setError(error.message)
-      setLoading(false)
-    } else {
-      navigate('/dashboard')
+
+    if (authError) { setError(authError.message); setLoading(false); return }
+
+    // Link referral after signup
+    if (referrerId && authData.user) {
+      await supabase.from('users').update({ referred_by: referrerId }).eq('id', authData.user.id)
+      await supabase.from('referrals').insert({
+        referrer_id: referrerId,
+        referred_id: authData.user.id,
+        code: data.referral_code!.toUpperCase(),
+        status: 'pending',
+      })
     }
+
+    navigate('/dashboard')
   }
 
   return (
@@ -81,10 +113,15 @@ export function RegisterPage() {
           {errors.confirm_password && <p className="text-red-400 text-xs mt-1">{errors.confirm_password.message}</p>}
         </div>
 
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-1.5">
+            Referral Code <span className="text-gray-500 font-normal">(optional)</span>
+          </label>
+          <input {...register('referral_code')} placeholder="e.g. ABC12345" className="input uppercase" />
+        </div>
+
         {error && (
-          <div className="bg-red-500/10 border border-red-500/30 text-red-400 rounded-lg px-4 py-3 text-sm">
-            {error}
-          </div>
+          <div className="bg-red-500/10 border border-red-500/30 text-red-400 rounded-lg px-4 py-3 text-sm">{error}</div>
         )}
 
         <button type="submit" disabled={loading} className="btn-primary w-full py-2.5">

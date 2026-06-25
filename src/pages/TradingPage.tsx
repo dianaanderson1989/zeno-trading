@@ -91,6 +91,10 @@ export function TradingPage() {
         queryClient.invalidateQueries({ queryKey: ['wallets'] })
         queryClient.invalidateQueries({ queryKey: ['transactions'] })
         queryClient.invalidateQueries({ queryKey: ['orders'] })
+        // Trigger referral reward on first trade
+        supabase.rpc('process_referral_reward', { p_user_id: user.id }).then(() => {
+          queryClient.invalidateQueries({ queryKey: ['my_referrals'] })
+        })
       } else {
         // Limit order — just store it as pending
         const { error } = await supabase.from('orders').insert({
@@ -108,6 +112,10 @@ export function TradingPage() {
         setQuantity('')
         setLimitPrice('')
         queryClient.invalidateQueries({ queryKey: ['orders'] })
+        // Trigger referral reward on first trade
+        supabase.rpc('process_referral_reward', { p_user_id: user.id }).then(() => {
+          queryClient.invalidateQueries({ queryKey: ['my_referrals'] })
+        })
       }
     } catch (e: any) {
       setError(e.message || 'Trade failed')

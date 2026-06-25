@@ -1,18 +1,20 @@
 import { NavLink } from 'react-router-dom'
 import {
-  LayoutDashboard, TrendingUp, Layers, ArrowLeftRight,
-  Wallet, History, User, Settings, ShieldCheck
+  LayoutDashboard, TrendingUp, Zap, Layers, ArrowLeftRight,
+  Wallet, History, Gift, ShieldCheck
 } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
 import { cn } from '@/utils/format'
 
 const navItems = [
-  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/trade', label: 'Trade', icon: TrendingUp },
-  { to: '/staking', label: 'Staking', icon: Layers },
-  { to: '/swap', label: 'Swap', icon: ArrowLeftRight },
-  { to: '/wallet', label: 'Wallet', icon: Wallet },
-  { to: '/history', label: 'History', icon: History },
+  { to: '/dashboard', label: 'Dashboard',       icon: LayoutDashboard },
+  { to: '/trade',     label: 'Spot Trade',       icon: TrendingUp },
+  { to: '/binary',    label: 'Binary Options',   icon: Zap },
+  { to: '/staking',   label: 'Staking',          icon: Layers },
+  { to: '/swap',      label: 'Swap',             icon: ArrowLeftRight },
+  { to: '/wallet',    label: 'Wallet',           icon: Wallet },
+  { to: '/history',   label: 'History',          icon: History },
+  { to: '/referral',  label: 'Referral',         icon: Gift },
 ]
 
 export function Sidebar() {
@@ -21,7 +23,6 @@ export function Sidebar() {
 
   return (
     <aside className="w-60 bg-dark-800 border-r border-dark-600 flex flex-col min-h-screen">
-      {/* Logo */}
       <div className="p-5 border-b border-dark-600">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-brand-500 flex items-center justify-center font-bold text-white text-sm">Z</div>
@@ -29,7 +30,6 @@ export function Sidebar() {
         </div>
       </div>
 
-      {/* Nav */}
       <nav className="flex-1 p-3 space-y-1">
         {navItems.map(({ to, label, icon: Icon }) => (
           <NavLink
@@ -56,9 +56,7 @@ export function Sidebar() {
               to="/admin"
               className={({ isActive }) => cn(
                 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
-                isActive
-                  ? 'bg-brand-500/15 text-brand-400'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-dark-700'
+                isActive ? 'bg-brand-500/15 text-brand-400' : 'text-gray-400 hover:text-gray-200 hover:bg-dark-700'
               )}
             >
               <ShieldCheck size={18} />
@@ -68,7 +66,6 @@ export function Sidebar() {
         )}
       </nav>
 
-      {/* User */}
       <div className="p-3 border-t border-dark-600">
         <NavLink
           to="/profile"

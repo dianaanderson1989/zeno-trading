@@ -1,8 +1,7 @@
-import { useState } from 'react'
 import { Routes, Route, NavLink, Navigate } from 'react-router-dom'
 import {
   LayoutDashboard, Users, ArrowDownToLine, ArrowUpFromLine,
-  TrendingUp, Layers, ChevronRight, ShieldCheck
+  TrendingUp, Layers, Wallet, Zap, ShieldCheck
 } from 'lucide-react'
 import { cn } from '@/utils/format'
 import { AdminDashboard } from '@/components/admin/AdminDashboard'
@@ -11,21 +10,24 @@ import { AdminDeposits } from '@/components/admin/AdminDeposits'
 import { AdminWithdrawals } from '@/components/admin/AdminWithdrawals'
 import { AdminOrders } from '@/components/admin/AdminOrders'
 import { AdminStaking } from '@/components/admin/AdminStaking'
+import { AdminDepositAddresses } from '@/components/admin/AdminDepositAddresses'
+import { AdminBinaryControl } from '@/components/admin/AdminBinaryControl'
 
 const navItems = [
-  { to: '/admin', label: 'Overview', icon: LayoutDashboard, end: true },
-  { to: '/admin/users', label: 'Users', icon: Users },
-  { to: '/admin/deposits', label: 'Deposits', icon: ArrowDownToLine },
-  { to: '/admin/withdrawals', label: 'Withdrawals', icon: ArrowUpFromLine },
-  { to: '/admin/orders', label: 'Orders', icon: TrendingUp },
-  { to: '/admin/staking', label: 'Staking Pools', icon: Layers },
+  { to: '/admin',              label: 'Overview',          icon: LayoutDashboard,  end: true },
+  { to: '/admin/users',        label: 'Users',             icon: Users },
+  { to: '/admin/deposits',     label: 'Deposits',          icon: ArrowDownToLine },
+  { to: '/admin/withdrawals',  label: 'Withdrawals',       icon: ArrowUpFromLine },
+  { to: '/admin/orders',       label: 'Orders',            icon: TrendingUp },
+  { to: '/admin/binary',       label: 'Binary Control',    icon: Zap },
+  { to: '/admin/staking',      label: 'Staking Pools',     icon: Layers },
+  { to: '/admin/addresses',    label: 'Deposit Addresses', icon: Wallet },
 ]
 
 export function AdminPage() {
   return (
     <div className="min-h-screen bg-dark-900 flex">
-      {/* Admin sidebar */}
-      <aside className="w-56 bg-dark-800 border-r border-dark-600 flex flex-col">
+      <aside className="w-56 bg-dark-800 border-r border-dark-600 flex flex-col flex-shrink-0">
         <div className="p-4 border-b border-dark-600">
           <div className="flex items-center gap-2">
             <ShieldCheck size={18} className="text-brand-400" />
@@ -57,7 +59,6 @@ export function AdminPage() {
         </div>
       </aside>
 
-      {/* Admin content */}
       <main className="flex-1 p-6 overflow-auto">
         <Routes>
           <Route index element={<AdminDashboard />} />
@@ -65,7 +66,9 @@ export function AdminPage() {
           <Route path="deposits" element={<AdminDeposits />} />
           <Route path="withdrawals" element={<AdminWithdrawals />} />
           <Route path="orders" element={<AdminOrders />} />
+          <Route path="binary" element={<AdminBinaryControl />} />
           <Route path="staking" element={<AdminStaking />} />
+          <Route path="addresses" element={<AdminDepositAddresses />} />
           <Route path="*" element={<Navigate to="/admin" replace />} />
         </Routes>
       </main>
