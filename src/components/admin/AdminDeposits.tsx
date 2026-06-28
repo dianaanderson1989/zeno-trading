@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle, XCircle, Eye, User, Coins, RefreshCw } from 'lucide-react'
+import { CheckCircle, XCircle, Eye, User, Coins, RefreshCw, AlertTriangle } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { formatDate, formatNumber } from '@/utils/format'
 
@@ -10,6 +10,7 @@ export function AdminDeposits() {
   const [processing, setProcessing] = useState<string | null>(null)
   const [notes, setNotes] = useState<Record<string, string>>({})
   const [detail, setDetail] = useState<any | null>(null)
+  const [approveModal, setApproveModal] = useState<{ deposit: any; verifiedAmount: string; note: string } | null>(null)
 
   const { data: deposits = [], isLoading, error, refetch } = useQuery({
     queryKey: ['admin_deposits', filter],
@@ -41,7 +42,7 @@ export function AdminDeposits() {
     refetchInterval: 10_000,
   })
 
-  const handleAction = async (deposit: any, action: 'approved' | 'rejected') => {
+  const handleAction = async (deposit: any, action: 'approved' | 'rejected', customAmount?: number) => {
     setProcessing(deposit.id)
     try {
       const { data: { user: adminUser } } = await supabase.auth.getUser()
@@ -61,9 +62,10 @@ export function AdminDeposits() {
         }
 
         // Step 2: Credit wallet
+        const creditAmount = customAmount ?? Number(deposit.amount)
         const { error: updateErr } = await supabase
           .from('wallets')
-          .update({ balance: Number(wallet.balance) + Number(deposit.amount) })
+          .update({ balance: Number(wallet.balance) + creditAmount })
           .eq('id', wallet.id)
 
         if (updateErr) throw new Error('Wallet update failed: ' + updateErr.message)
@@ -75,9 +77,9 @@ export function AdminDeposits() {
             user_id: deposit.user_id,
             transaction_type: 'deposit',
             asset_id: deposit.asset_id,
-            amount: Number(deposit.amount),
+            amount: creditAmount,
             fee: 0,
-            description: `Deposit approved — ${deposit.network} — ${deposit.amount} ${deposit.assets?.symbol ?? ''}`,
+            description: `Deposit approved — ${deposit.network} — ${creditAmount} ${deposit.assets?.symbol ?? ''} (user entered: ${deposit.amount})`,
             deposit_id: deposit.id,
             status: 'completed',
           })
@@ -301,14 +303,12 @@ export function AdminDeposits() {
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <button
-                      onClick={() => handleAction(detail, 'approved')}
+                      onClick={() => setApproveModal({ deposit: detail, verifiedAmount: String(detail.amount), note: notes[detail.id] || '' })}
                       disabled={processing === detail.id}
                       className="flex items-center justify-center gap-1.5 py-3 rounded-xl text-xs font-black transition-all disabled:opacity-50"
                       style={{ background: 'linear-gradient(135deg, #00ff88, #00cc6a)', color: '#050810', boxShadow: '0 0 20px rgba(0,255,136,0.3)' }}
                     >
-                      {processing === detail.id
-                        ? <span className="w-3 h-3 border-2 border-dark-950/40 border-t-dark-950 rounded-full animate-spin" />
-                        : <><CheckCircle size={13} /> Approve</>}
+                      <CheckCircle size={13} /> Approve
                     </button>
                     <button
                       onClick={() => handleAction(detail, 'rejected')}
@@ -331,6 +331,106 @@ export function AdminDeposits() {
           </div>
         )}
       </div>
+
+      {/* Approve Confirmation Modal */}
+      {approveModal && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 animate-fade-in"
+          onClick={e => { if (e.target === e.currentTarget) setApproveModal(null) }}>
+          <div className="bg-dark-800 border border-neon-green/20 rounded-2xl p-6 w-full max-w-md shadow-neon-green animate-slide-up">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-10 h-10 rounded-xl bg-neon-green/10 flex items-center justify-center border border-neon-green/20">
+                <AlertTriangle size={18} className="text-neon-green" />
+              </div>
+              <div>
+                <h3 className="font-black text-white">Verify Deposit Amount</h3>
+                <p className="text-xs text-slate-500">Review before crediting user's wallet</p>
+              </div>
+            </div>
+
+            {/* User summary */}
+            <div className="bg-white/[0.03] rounded-xl p-4 mb-4 border border-white/[0.06] space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-500">User</span>
+                <span className="text-slate-200 font-medium">
+                  {approveModal.deposit.users?.first_name
+                    ? `${approveModal.deposit.users.first_name} ${approveModal.deposit.users.last_name ?? ''}`.trim()
+                    : approveModal.deposit.users?.email}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-500">Asset</span>
+                <span className="text-slate-200">{approveModal.deposit.assets?.symbol}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-500">Network</span>
+                <span className="text-slate-200">{approveModal.deposit.network}</span>
+              </div>
+              <div className="flex justify-between text-sm border-t border-white/[0.06] pt-2">
+                <span className="text-slate-500">User entered</span>
+                <span className="font-mono font-bold text-yellow-400">{formatNumber(approveModal.deposit.amount, 6)} {approveModal.deposit.assets?.symbol}</span>
+              </div>
+            </div>
+
+            {/* Editable amount */}
+            <div className="mb-4">
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">
+                Credit Amount (editable) <span className="text-neon-green">*</span>
+              </label>
+              <input
+                type="number"
+                value={approveModal.verifiedAmount}
+                onChange={e => setApproveModal(m => m ? { ...m, verifiedAmount: e.target.value } : null)}
+                className="input font-mono text-lg font-bold text-neon-green"
+                step="any"
+                min="0"
+                autoFocus
+              />
+              {parseFloat(approveModal.verifiedAmount) !== Number(approveModal.deposit.amount) && (
+                <p className="text-xs text-yellow-400 mt-1.5 flex items-center gap-1">
+                  <AlertTriangle size={11} />
+                  Amount differs from user's entry ({formatNumber(approveModal.deposit.amount, 6)})
+                </p>
+              )}
+            </div>
+
+            {/* Admin note */}
+            <div className="mb-5">
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Admin Note (optional)</label>
+              <input
+                value={approveModal.note}
+                onChange={e => setApproveModal(m => m ? { ...m, note: e.target.value } : null)}
+                placeholder="e.g. Corrected amount from 1000 to 100"
+                className="input text-sm"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setApproveModal(null)}
+                className="btn-secondary py-3 font-bold"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  const amount = parseFloat(approveModal.verifiedAmount)
+                  if (!amount || amount <= 0) { alert('Enter a valid amount'); return }
+                  const dep = approveModal.deposit
+                  setNotes(n => ({ ...n, [dep.id]: approveModal.note }))
+                  setApproveModal(null)
+                  setDetail(null)
+                  await handleAction({ ...dep, _adminNote: approveModal.note }, 'approved', amount)
+                }}
+                disabled={!approveModal.verifiedAmount || parseFloat(approveModal.verifiedAmount) <= 0 || processing === approveModal.deposit.id}
+                className="py-3 rounded-xl font-black text-sm transition-all disabled:opacity-50"
+                style={{ background: 'linear-gradient(135deg, #00ff88, #00cc6a)', color: '#050810', boxShadow: '0 0 20px rgba(0,255,136,0.3)' }}
+              >
+                {processing ? 'Processing...' : 'Confirm & Credit'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
