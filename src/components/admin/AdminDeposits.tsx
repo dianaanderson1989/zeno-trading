@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle, XCircle, Clock } from 'lucide-react'
+import { CheckCircle, XCircle, Eye, User, Coins, RefreshCw } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { formatDate, formatNumber } from '@/utils/format'
 
@@ -9,141 +9,326 @@ export function AdminDeposits() {
   const [filter, setFilter] = useState('pending')
   const [processing, setProcessing] = useState<string | null>(null)
   const [notes, setNotes] = useState<Record<string, string>>({})
+  const [detail, setDetail] = useState<any | null>(null)
 
-  const { data: deposits = [], isLoading } = useQuery({
+  const { data: deposits = [], isLoading, error, refetch } = useQuery({
     queryKey: ['admin_deposits', filter],
     queryFn: async () => {
-      let q = supabase.from('deposits')
-        .select('*, assets(*), users(email, first_name, last_name)')
+      // Always fetch ALL deposits first, then filter client-side
+      // This avoids any server-side filter issues
+      const { data, error } = await supabase
+        .from('deposits')
+        .select(`
+          id, user_id, asset_id, amount, network, tx_hash,
+          address, status, admin_notes, created_at, updated_at,
+          assets:asset_id(symbol, name, icon_url),
+          users:user_id(id, email, first_name, last_name, created_at)
+        `)
         .order('created_at', { ascending: false })
-      if (filter !== 'all') q = q.eq('status', filter)
-      const { data } = await q
-      return data ?? []
+
+      if (error) {
+        console.error('[AdminDeposits] Query error:', error)
+        throw error
+      }
+
+      console.log('[AdminDeposits] All deposits:', data?.length, data?.map(d => ({ id: d.id, status: d.status })))
+
+      const all = data ?? []
+      if (filter === 'all') return all
+      return all.filter((d: any) => d.status === filter)
     },
-    staleTime: 15_000,
-    refetchInterval: 30_000,
+    staleTime: 5_000,
+    refetchInterval: 10_000,
   })
 
   const handleAction = async (deposit: any, action: 'approved' | 'rejected') => {
     setProcessing(deposit.id)
     try {
-      await supabase.from('deposits').update({
-        status: action,
-        admin_notes: notes[deposit.id] || null,
-        admin_user_id: (await supabase.auth.getUser()).data.user?.id,
-        updated_at: new Date().toISOString(),
-      }).eq('id', deposit.id)
+      const { data: { user: adminUser } } = await supabase.auth.getUser()
+      const adminId = adminUser?.id
 
       if (action === 'approved') {
-        // Credit wallet
-        const { data: wallet } = await supabase.from('wallets')
-          .select('id, balance').eq('user_id', deposit.user_id).eq('asset_id', deposit.asset_id).single()
-        if (wallet) {
-          await supabase.from('wallets').update({ balance: wallet.balance + Number(deposit.amount) }).eq('id', wallet.id)
-          await supabase.from('transactions').insert({
+        // Step 1: Find wallet
+        const { data: wallet, error: walletErr } = await supabase
+          .from('wallets')
+          .select('id, balance')
+          .eq('user_id', deposit.user_id)
+          .eq('asset_id', deposit.asset_id)
+          .single()
+
+        if (walletErr || !wallet) {
+          throw new Error('Could not find wallet for user. Error: ' + walletErr?.message)
+        }
+
+        // Step 2: Credit wallet
+        const { error: updateErr } = await supabase
+          .from('wallets')
+          .update({ balance: Number(wallet.balance) + Number(deposit.amount) })
+          .eq('id', wallet.id)
+
+        if (updateErr) throw new Error('Wallet update failed: ' + updateErr.message)
+
+        // Step 3: Create transaction record
+        const { error: txErr } = await supabase
+          .from('transactions')
+          .insert({
             user_id: deposit.user_id,
             transaction_type: 'deposit',
             asset_id: deposit.asset_id,
-            amount: deposit.amount,
-            description: `Deposit approved (${deposit.network})`,
+            amount: Number(deposit.amount),
+            fee: 0,
+            description: `Deposit approved — ${deposit.network} — ${deposit.amount} ${deposit.assets?.symbol ?? ''}`,
             deposit_id: deposit.id,
             status: 'completed',
           })
-          // Mark deposit as completed
-          await supabase.from('deposits').update({ status: 'completed' }).eq('id', deposit.id)
-        }
+
+        if (txErr) throw new Error('Transaction insert failed: ' + txErr.message)
+
+        // Step 4: Mark deposit as completed
+        const { error: depErr } = await supabase
+          .from('deposits')
+          .update({
+            status: 'completed',
+            admin_notes: notes[deposit.id] || null,
+            admin_user_id: adminId,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', deposit.id)
+
+        if (depErr) throw new Error('Deposit status update failed: ' + depErr.message)
+
+      } else {
+        // Reject
+        const { error: depErr } = await supabase
+          .from('deposits')
+          .update({
+            status: 'rejected',
+            admin_notes: notes[deposit.id] || 'Rejected by admin',
+            admin_user_id: adminId,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', deposit.id)
+
+        if (depErr) throw new Error('Reject failed: ' + depErr.message)
       }
 
+      // Refresh both this list and the dashboard stats
       queryClient.invalidateQueries({ queryKey: ['admin_deposits'] })
+      queryClient.invalidateQueries({ queryKey: ['admin_stats'] })
+      queryClient.invalidateQueries({ queryKey: ['wallets'] })
+      setDetail(null)
+
+    } catch (e: any) {
+      alert('❌ Error: ' + e.message)
+      console.error('[AdminDeposits] Action error:', e)
     } finally {
       setProcessing(null)
     }
   }
 
   const statusColors: Record<string, string> = {
-    pending: 'bg-yellow-500/15 text-yellow-400',
-    approved: 'bg-blue-500/15 text-blue-400',
-    completed: 'bg-brand-500/15 text-brand-400',
-    rejected: 'bg-red-500/15 text-red-400',
+    pending:   'bg-yellow-500/15 text-yellow-400 border border-yellow-500/30',
+    completed: 'bg-neon-green/10 text-neon-green border border-neon-green/30',
+    rejected:  'bg-neon-red/10 text-neon-red border border-neon-red/30',
+  }
+
+  const filterCounts = {
+    pending:   deposits.length === 0 && filter !== 'pending' ? 0 : undefined,
   }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-white">Deposits</h1>
-        <div className="flex gap-2">
+        <div>
+          <h1 className="text-2xl font-black text-white">Deposits</h1>
+          {error && (
+            <p className="text-neon-red text-xs mt-1">
+              ⚠️ Query error: {(error as any).message} — check RLS policies
+            </p>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={() => refetch()} className="btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5">
+            <RefreshCw size={12} /> Refresh
+          </button>
           {['pending', 'completed', 'rejected', 'all'].map(f => (
-            <button key={f} onClick={() => setFilter(f)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-colors ${filter === f ? 'bg-brand-500 text-white' : 'bg-dark-700 text-gray-400 hover:text-gray-200'}`}>
+            <button key={f} onClick={() => { setFilter(f); setDetail(null) }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-colors ${
+                filter === f
+                  ? 'bg-neon-green text-dark-950'
+                  : 'bg-dark-700 text-slate-400 hover:text-white border border-white/[0.06]'
+              }`}>
               {f}
             </button>
           ))}
         </div>
       </div>
 
-      <div className="card overflow-hidden p-0">
-        {isLoading ? (
-          <div className="p-4 space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-14 bg-dark-700 rounded-lg animate-pulse" />)}</div>
-        ) : deposits.length === 0 ? (
-          <p className="text-center text-gray-500 py-12">No {filter} deposits</p>
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-dark-600 text-gray-500 text-xs uppercase">
-                <th className="text-left p-4 font-medium">User</th>
-                <th className="text-right p-4 font-medium">Amount</th>
-                <th className="text-left p-4 font-medium">Network</th>
-                <th className="text-left p-4 font-medium">Status</th>
-                <th className="text-right p-4 font-medium">Date</th>
-                <th className="p-4"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-dark-600">
-              {deposits.map((d: any) => (
-                <tr key={d.id} className="hover:bg-dark-700/40">
-                  <td className="p-4">
-                    <p className="text-gray-200">{d.users?.first_name ? `${d.users.first_name} ${d.users.last_name ?? ''}` : d.users?.email}</p>
-                    <p className="text-xs text-gray-500">{d.users?.email}</p>
-                  </td>
-                  <td className="p-4 text-right font-mono text-gray-200">{formatNumber(d.amount, 4)} {d.assets?.symbol}</td>
-                  <td className="p-4 text-gray-400">{d.network}</td>
-                  <td className="p-4"><span className={`badge ${statusColors[d.status]}`}>{d.status}</span></td>
-                  <td className="p-4 text-right text-xs text-gray-500">{formatDate(d.created_at)}</td>
-                  <td className="p-4">
-                    {d.status === 'pending' && (
-                      <div className="flex flex-col gap-1.5">
-                        <input
-                          placeholder="Admin note..."
-                          value={notes[d.id] || ''}
-                          onChange={e => setNotes(n => ({ ...n, [d.id]: e.target.value }))}
-                          className="input text-xs py-1"
-                        />
-                        <div className="flex gap-1.5">
-                          <button
-                            onClick={() => handleAction(d, 'approved')}
-                            disabled={processing === d.id}
-                            className="flex items-center gap-1 px-2 py-1 text-xs bg-brand-500/15 text-brand-400 hover:bg-brand-500/25 rounded-lg transition-colors"
-                          >
-                            <CheckCircle size={12} /> Approve
-                          </button>
-                          <button
-                            onClick={() => handleAction(d, 'rejected')}
-                            disabled={processing === d.id}
-                            className="flex items-center gap-1 px-2 py-1 text-xs bg-red-500/15 text-red-400 hover:bg-red-500/25 rounded-lg transition-colors"
-                          >
-                            <XCircle size={12} /> Reject
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                    {d.admin_notes && d.status !== 'pending' && (
-                      <p className="text-xs text-gray-500 italic">{d.admin_notes}</p>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className={detail ? 'lg:col-span-2' : 'lg:col-span-3'}>
+          <div className="card overflow-hidden p-0">
+            {isLoading ? (
+              <div className="p-6 space-y-3">
+                {[...Array(3)].map((_, i) => <div key={i} className="h-14 rounded-xl shimmer" />)}
+              </div>
+            ) : deposits.length === 0 ? (
+              <div className="text-center py-16 space-y-2">
+                <p className="text-slate-400 text-sm font-medium">No {filter} deposits</p>
+                <p className="text-slate-600 text-xs">
+                  {filter === 'pending'
+                    ? 'If you see pending deposits on the dashboard, run fix_rls.sql in Supabase then click Refresh'
+                    : 'Try switching to "All" to see all deposits'}
+                </p>
+                <button onClick={() => setFilter('all')} className="text-xs text-neon-green hover:text-neon-green/80 mt-2">
+                  Show all deposits →
+                </button>
+              </div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-white/[0.04]">
+                    {['User', 'Amount', 'Network', 'Status', 'Date', ''].map(h => (
+                      <th key={h} className={`p-4 text-[10px] font-bold text-slate-600 uppercase tracking-wider ${
+                        ['User','Network'].includes(h) ? 'text-left' : h === '' ? '' : 'text-right'
+                      }`}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/[0.03]">
+                  {deposits.map((d: any) => (
+                    <tr key={d.id}
+                      onClick={() => setDetail(detail?.id === d.id ? null : d)}
+                      className={`table-row-hover cursor-pointer transition-colors ${
+                        detail?.id === d.id ? 'bg-neon-green/5' : ''
+                      }`}>
+                      <td className="p-4">
+                        <p className="text-slate-200 font-semibold text-sm">
+                          {d.users?.first_name
+                            ? `${d.users.first_name} ${d.users.last_name ?? ''}`.trim()
+                            : d.users?.email ?? 'Unknown'}
+                        </p>
+                        <p className="text-xs text-slate-600">{d.users?.email}</p>
+                      </td>
+                      <td className="p-4 text-right">
+                        <p className="font-mono font-bold text-slate-200">{formatNumber(d.amount, 4)}</p>
+                        <p className="text-xs text-slate-600">{d.assets?.symbol}</p>
+                      </td>
+                      <td className="p-4">
+                        <span className="badge bg-dark-700 text-slate-400 border border-white/[0.06] text-xs">{d.network}</span>
+                      </td>
+                      <td className="p-4 text-right">
+                        <span className={`badge text-xs ${statusColors[d.status] ?? 'bg-dark-700 text-slate-400'}`}>
+                          {d.status}
+                        </span>
+                      </td>
+                      <td className="p-4 text-right text-xs text-slate-600 whitespace-nowrap">{formatDate(d.created_at)}</td>
+                      <td className="p-4 text-right">
+                        <Eye size={14} className={`ml-auto transition-colors ${detail?.id === d.id ? 'text-neon-green' : 'text-slate-600 hover:text-neon-green'}`} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+
+        {/* Detail panel */}
+        {detail && (
+          <div className="lg:col-span-1 animate-slide-up">
+            <div className="card border border-white/[0.08] sticky top-6 space-y-5">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-white text-sm">Deposit Detail</h3>
+                <button onClick={() => setDetail(null)} className="text-slate-600 hover:text-slate-300 text-lg">✕</button>
+              </div>
+
+              {/* User */}
+              <div className="bg-white/[0.03] rounded-xl p-4 space-y-2 border border-white/[0.05]">
+                <div className="flex items-center gap-2 mb-1">
+                  <User size={12} className="text-neon-cyan" />
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">User</span>
+                </div>
+                <p className="text-white font-bold">
+                  {detail.users?.first_name
+                    ? `${detail.users.first_name} ${detail.users.last_name ?? ''}`.trim()
+                    : 'No name set'}
+                </p>
+                <p className="text-xs text-slate-500">{detail.users?.email}</p>
+                <p className="text-xs text-slate-600">
+                  Member since {detail.users?.created_at ? new Date(detail.users.created_at).toLocaleDateString() : '—'}
+                </p>
+              </div>
+
+              {/* Deposit info */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Coins size={12} className="text-neon-green" />
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Deposit Info</span>
+                </div>
+                {[
+                  { label: 'Amount',    value: `${formatNumber(detail.amount, 6)} ${detail.assets?.symbol ?? ''}` },
+                  { label: 'Asset',     value: detail.assets?.name ?? '—' },
+                  { label: 'Network',   value: detail.network },
+                  { label: 'Status',    value: detail.status, isStatus: true },
+                  { label: 'Submitted', value: formatDate(detail.created_at) },
+                  { label: 'TX Hash',   value: detail.tx_hash ? detail.tx_hash.slice(0, 16) + '...' : 'Not provided' },
+                ].map(row => (
+                  <div key={row.label} className="flex justify-between items-start gap-3">
+                    <span className="text-xs text-slate-600 flex-shrink-0">{row.label}</span>
+                    <span className={`text-xs font-mono text-right ${
+                      row.isStatus
+                        ? detail.status === 'pending'   ? 'text-yellow-400'
+                        : detail.status === 'completed' ? 'text-neon-green'
+                        : 'text-neon-red'
+                        : 'text-slate-300'
+                    }`}>{row.value}</span>
+                  </div>
+                ))}
+              </div>
+
+              {detail.status === 'pending' && (
+                <>
+                  <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Admin Note (optional)</label>
+                    <textarea
+                      value={notes[detail.id] || ''}
+                      onChange={e => setNotes(n => ({ ...n, [detail.id]: e.target.value }))}
+                      placeholder="Add a note..."
+                      rows={2}
+                      className="input text-xs resize-none"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => handleAction(detail, 'approved')}
+                      disabled={processing === detail.id}
+                      className="flex items-center justify-center gap-1.5 py-3 rounded-xl text-xs font-black transition-all disabled:opacity-50"
+                      style={{ background: 'linear-gradient(135deg, #00ff88, #00cc6a)', color: '#050810', boxShadow: '0 0 20px rgba(0,255,136,0.3)' }}
+                    >
+                      {processing === detail.id
+                        ? <span className="w-3 h-3 border-2 border-dark-950/40 border-t-dark-950 rounded-full animate-spin" />
+                        : <><CheckCircle size={13} /> Approve</>}
+                    </button>
+                    <button
+                      onClick={() => handleAction(detail, 'rejected')}
+                      disabled={processing === detail.id}
+                      className="flex items-center justify-center gap-1.5 py-3 rounded-xl text-xs font-black bg-neon-red/10 text-neon-red border border-neon-red/30 hover:bg-neon-red/20 disabled:opacity-50 transition-all"
+                    >
+                      <XCircle size={13} /> Reject
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {detail.status !== 'pending' && detail.admin_notes && (
+                <div className="bg-white/[0.03] rounded-xl p-3 border border-white/[0.05]">
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Admin Note</p>
+                  <p className="text-xs text-slate-400">{detail.admin_notes}</p>
+                </div>
+              )}
+            </div>
+          </div>
         )}
       </div>
     </div>

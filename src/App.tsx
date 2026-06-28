@@ -5,6 +5,8 @@ import { AppLayout } from '@/components/layout/AppLayout'
 import { AuthLayout } from '@/components/layout/AuthLayout'
 import { LoginPage } from '@/pages/LoginPage'
 import { RegisterPage } from '@/pages/RegisterPage'
+import { ForgotPasswordPage } from '@/pages/ForgotPasswordPage'
+import { ResetPasswordPage } from '@/pages/ResetPasswordPage'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { TradingPage } from '@/pages/TradingPage'
 import { BinaryPage } from '@/pages/BinaryPage'
@@ -40,10 +42,11 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 
 function LoadingScreen() {
   return (
-    <div className="min-h-screen bg-dark-900 flex items-center justify-center">
+    <div className="min-h-screen bg-dark-950 flex items-center justify-center">
       <div className="flex flex-col items-center gap-4">
-        <div className="w-10 h-10 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
-        <p className="text-gray-400 text-sm">Loading Zeno...</p>
+        <div className="w-10 h-10 rounded-xl flex items-center justify-center font-black text-dark-950 text-lg animate-glow-pulse"
+          style={{ background: 'linear-gradient(135deg, #00ff88, #00d4ff)' }}>Z</div>
+        <p className="text-slate-500 text-sm font-mono">Loading Zeno...</p>
       </div>
     </div>
   )
@@ -54,20 +57,22 @@ function AppWithPrices() {
   return (
     <Routes>
       <Route element={<AuthLayout />}>
-        <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
-        <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
+        <Route path="/login"           element={<PublicRoute><LoginPage /></PublicRoute>} />
+        <Route path="/register"        element={<PublicRoute><RegisterPage /></PublicRoute>} />
+        <Route path="/forgot-password" element={<PublicRoute><ForgotPasswordPage /></PublicRoute>} />
+        <Route path="/reset-password"  element={<ResetPasswordPage />} />
       </Route>
       <Route element={<PrivateRoute><AppLayout /></PrivateRoute>}>
         <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/trade" element={<TradingPage />} />
-        <Route path="/trade/:symbol" element={<TradingPage />} />
-        <Route path="/binary" element={<BinaryPage />} />
-        <Route path="/staking" element={<StakingPage />} />
-        <Route path="/swap" element={<SwapPage />} />
-        <Route path="/wallet" element={<WalletPage />} />
-        <Route path="/history" element={<HistoryPage />} />
-        <Route path="/profile" element={<ProfilePage />} />
-        <Route path="/referral" element={<ReferralPage />} />
+        <Route path="/trade"          element={<TradingPage />} />
+        <Route path="/trade/:symbol"  element={<TradingPage />} />
+        <Route path="/binary"    element={<BinaryPage />} />
+        <Route path="/staking"   element={<StakingPage />} />
+        <Route path="/swap"      element={<SwapPage />} />
+        <Route path="/wallet"    element={<WalletPage />} />
+        <Route path="/history"   element={<HistoryPage />} />
+        <Route path="/account"   element={<ProfilePage />} />
+        <Route path="/referral"  element={<ReferralPage />} />
       </Route>
       <Route path="/admin/*" element={<AdminRoute><AdminPage /></AdminRoute>} />
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
