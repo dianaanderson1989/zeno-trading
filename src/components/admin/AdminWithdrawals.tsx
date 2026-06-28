@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle, XCircle, Eye, User, Coins } from 'lucide-react'
+import { CheckCircle, XCircle, Eye, User, Coins, RefreshCw } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { formatDate, formatNumber } from '@/utils/format'
 
@@ -11,17 +11,20 @@ export function AdminWithdrawals() {
   const [notes, setNotes] = useState<Record<string, string>>({})
   const [detail, setDetail] = useState<any | null>(null)
 
-  const { data: withdrawals = [], isLoading } = useQuery({
+  const { data: withdrawals = [], isLoading, refetch } = useQuery({
     queryKey: ['admin_withdrawals', filter],
     queryFn: async () => {
-      let q = supabase
+      const { data, error } = await supabase
         .from('withdrawals')
-        .select(`*, assets(symbol, name, icon_url), users(id, email, first_name, last_name, created_at)`)
+        .select(`*, assets:asset_id(symbol, name, icon_url), users:user_id(id, email, first_name, last_name, created_at)`)
         .order('created_at', { ascending: false })
-      if (filter !== 'all') q = q.eq('status', filter)
-      const { data, error } = await q
-      if (error) throw error
-      return data ?? []
+      if (error) {
+        console.error('[AdminWithdrawals] Query error:', error)
+        throw error
+      }
+      const all = data ?? []
+      if (filter === 'all') return all
+      return all.filter((w: any) => w.status === filter)
     },
     staleTime: 10_000,
     refetchInterval: 15_000,
@@ -94,7 +97,10 @@ export function AdminWithdrawals() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-black text-white">Withdrawals</h1>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          <button onClick={() => refetch()} className="btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5">
+            <RefreshCw size={12} /> Refresh
+          </button>
           {['pending', 'completed', 'rejected', 'all'].map(f => (
             <button key={f} onClick={() => setFilter(f)}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-colors ${
@@ -112,7 +118,17 @@ export function AdminWithdrawals() {
             {isLoading ? (
               <div className="p-4 space-y-3">{[...Array(4)].map((_, i) => <div key={i} className="h-14 rounded-lg shimmer" />)}</div>
             ) : withdrawals.length === 0 ? (
-              <div className="text-center py-16"><p className="text-slate-500 text-sm">No {filter} withdrawals</p></div>
+              <div className="text-center py-16 space-y-2">
+                <p className="text-slate-400 text-sm font-medium">No {filter} withdrawals</p>
+                <p className="text-slate-600 text-xs">
+                  {filter === 'pending'
+                    ? 'If dashboard shows pending withdrawals, run fix_withdrawals_rls.sql then click Refresh'
+                    : 'Try switching to "All" to see all withdrawals'}
+                </p>
+                <button onClick={() => setFilter('all')} className="text-xs text-neon-green hover:text-neon-green/80 mt-2">
+                  Show all withdrawals →
+                </button>
+              </div>
             ) : (
               <table className="w-full text-sm">
                 <thead>

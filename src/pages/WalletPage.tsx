@@ -94,8 +94,9 @@ export function WalletPage() {
     })
     setSubmitting(false)
     if (error) { setMsg('Error: ' + error.message); return }
-    setMsg('Deposit submitted! Admin will verify and credit your account.')
+    setMsg('✅ Deposit submitted! Closing in 4 seconds...')
     queryClient.invalidateQueries({ queryKey: ['wallets'] })
+    setTimeout(() => { setModal(null); setMsg('') }, 4000)
   }
 
   const handleWithdraw = async () => {
@@ -111,7 +112,8 @@ export function WalletPage() {
     })
     setSubmitting(false)
     if (error) { setMsg('Error: ' + error.message); return }
-    setMsg('Withdrawal request submitted! Awaiting admin approval.')
+    setMsg('✅ Withdrawal request submitted! Closing in 4 seconds...')
+    setTimeout(() => { setModal(null); setMsg('') }, 4000)
   }
 
   const networks = ['ERC20', 'TRC20', 'BEP20', 'BTC', 'SOL', 'Polygon', 'Arbitrum']
