@@ -91,6 +91,14 @@ export function TradingPage() {
         queryClient.invalidateQueries({ queryKey: ['wallets'] })
         queryClient.invalidateQueries({ queryKey: ['transactions'] })
         queryClient.invalidateQueries({ queryKey: ['orders'] })
+        // Notify user of trade settlement
+        supabase.from('notifications').insert({
+          user_id: user.id,
+          type: side === 'buy' ? 'trade_win' : 'trade_win',
+          title: `${side === 'buy' ? '🟢 Buy' : '🔴 Sell'} Order Filled`,
+          message: `${side === 'buy' ? 'Bought' : 'Sold'} ${formatNumber(qty, 4)} ${selectedSymbol} at ${formatCurrency(currentPrice)}. Total: ${formatCurrency(total)}.`,
+          metadata: { side, symbol: selectedSymbol, quantity: qty, price: currentPrice, total },
+        })
         // Trigger referral reward on first trade
         supabase.rpc('process_referral_reward', { p_user_id: user.id }).then(() => {
           queryClient.invalidateQueries({ queryKey: ['my_referrals'] })

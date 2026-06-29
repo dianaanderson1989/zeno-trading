@@ -99,6 +99,15 @@ export function AdminDeposits() {
 
         if (depErr) throw new Error('Deposit status update failed: ' + depErr.message)
 
+        // Notify user — deposit approved
+        await supabase.from('notifications').insert({
+          user_id: deposit.user_id,
+          type: 'deposit_approved',
+          title: '✅ Deposit Approved',
+          message: `Your deposit of ${creditAmount} ${deposit.assets?.symbol ?? ''} via ${deposit.network} has been approved and credited to your wallet.`,
+          metadata: { deposit_id: deposit.id, amount: creditAmount, asset: deposit.assets?.symbol, network: deposit.network },
+        })
+
       } else {
         // Reject
         const { error: depErr } = await supabase
@@ -112,6 +121,15 @@ export function AdminDeposits() {
           .eq('id', deposit.id)
 
         if (depErr) throw new Error('Reject failed: ' + depErr.message)
+
+        // Notify user — deposit rejected
+        await supabase.from('notifications').insert({
+          user_id: deposit.user_id,
+          type: 'deposit_rejected',
+          title: '❌ Deposit Rejected',
+          message: `Your deposit of ${Number(deposit.amount)} ${deposit.assets?.symbol ?? ''} via ${deposit.network} was rejected. ${notes[deposit.id] ? 'Reason: ' + notes[deposit.id] : 'Please contact support.'}`,
+          metadata: { deposit_id: deposit.id, amount: deposit.amount, network: deposit.network },
+        })
       }
 
       // Refresh both this list and the dashboard stats

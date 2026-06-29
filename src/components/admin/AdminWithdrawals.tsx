@@ -67,6 +67,15 @@ export function AdminWithdrawals() {
           updated_at: new Date().toISOString(),
         }).eq('id', w.id)
 
+        // Notify user — withdrawal approved
+        await supabase.from('notifications').insert({
+          user_id: w.user_id,
+          type: 'withdrawal_approved',
+          title: '✅ Withdrawal Approved',
+          message: `Your withdrawal of ${Number(w.amount)} ${w.assets?.symbol ?? ''} via ${w.network} has been approved and is being processed.`,
+          metadata: { withdrawal_id: w.id, amount: w.amount, asset: w.assets?.symbol, network: w.network, address: w.address },
+        })
+
       } else {
         await supabase.from('withdrawals').update({
           status: 'rejected',
@@ -75,6 +84,15 @@ export function AdminWithdrawals() {
           admin_user_id: adminId,
           updated_at: new Date().toISOString(),
         }).eq('id', w.id)
+
+        // Notify user — withdrawal rejected
+        await supabase.from('notifications').insert({
+          user_id: w.user_id,
+          type: 'withdrawal_rejected',
+          title: '❌ Withdrawal Rejected',
+          message: `Your withdrawal of ${Number(w.amount)} ${w.assets?.symbol ?? ''} via ${w.network} was rejected. ${notes[w.id] ? 'Reason: ' + notes[w.id] : 'Please contact support.'}`,
+          metadata: { withdrawal_id: w.id, amount: w.amount, network: w.network },
+        })
       }
 
       queryClient.invalidateQueries({ queryKey: ['admin_withdrawals'] })

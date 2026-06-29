@@ -1,13 +1,14 @@
-import { Bell, LogOut } from 'lucide-react'
+import { LogOut } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
 import { usePrices } from '@/hooks/usePrices'
 import { formatCurrency, formatPercent } from '@/utils/format'
+import { NotificationBell } from './NotificationBell'
 
 export function TopBar() {
   const signOut = useAuthStore(s => s.signOut)
   const { prices } = usePrices()
 
-  const ticker = ['BTC','ETH','SOL','BNB','XRP']
+  const ticker = ['BTC', 'ETH', 'SOL', 'BNB', 'XRP']
   const tickerFeeds = Object.values(prices).filter(p => ticker.includes(p.assets?.symbol ?? ''))
 
   return (
@@ -29,9 +30,7 @@ export function TopBar() {
 
       {/* Actions */}
       <div className="flex items-center gap-1">
-        <button className="w-8 h-8 flex items-center justify-center text-slate-500 hover:text-slate-200 hover:bg-white/[0.06] rounded-lg transition-colors">
-          <Bell size={15} />
-        </button>
+        <NotificationBell />
         <button onClick={signOut}
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-slate-500 hover:text-slate-200 hover:bg-white/[0.06] rounded-lg transition-colors">
           <LogOut size={13} />

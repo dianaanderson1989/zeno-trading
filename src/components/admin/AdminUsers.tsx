@@ -52,6 +52,36 @@ export function AdminUsers() {
     queryClient.invalidateQueries({ queryKey: ['admin_users'] })
   }
 
+  const updateKyc = async (user: User, kyc_status: string) => {
+    await supabase.from('users').update({ kyc_status }).eq('id', user.id)
+    // Notify user
+    const typeMap: Record<string, string> = {
+      approved: 'kyc_approved',
+      rejected: 'kyc_rejected',
+      in_review: 'kyc_in_review',
+    }
+    const titleMap: Record<string, string> = {
+      approved: '✅ KYC Approved',
+      rejected: '❌ KYC Rejected',
+      in_review: '🔍 KYC Under Review',
+    }
+    const msgMap: Record<string, string> = {
+      approved: 'Your identity verification has been approved. You now have full access to all platform features.',
+      rejected: 'Your identity verification was rejected. Please resubmit your documents or contact support.',
+      in_review: 'Your identity documents are currently being reviewed. This usually takes 1–2 business days.',
+    }
+    if (typeMap[kyc_status]) {
+      await supabase.from('notifications').insert({
+        user_id: user.id,
+        type: typeMap[kyc_status],
+        title: titleMap[kyc_status],
+        message: msgMap[kyc_status],
+        metadata: { kyc_status },
+      })
+    }
+    queryClient.invalidateQueries({ queryKey: ['admin_users'] })
+  }
+
   const adjustBalance = async () => {
     if (!selectedUser || !adjustAsset || !adjustAmount) return
     setSaving(true)
@@ -169,7 +199,18 @@ export function AdminUsers() {
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between"><span className="text-gray-400">Email</span><span className="text-gray-200 truncate ml-2">{selectedUser.email}</span></div>
                 <div className="flex justify-between"><span className="text-gray-400">Role</span><span className="text-gray-200 capitalize">{selectedUser.role}</span></div>
-                <div className="flex justify-between"><span className="text-gray-400">KYC</span><span className="text-gray-200">{selectedUser.kyc_status} (L{selectedUser.kyc_level})</span></div>
+                <div className="flex justify-between items-center"><span className="text-gray-400">KYC</span>
+                  <select
+                    value={selectedUser.kyc_status}
+                    onChange={e => updateKyc(selectedUser, e.target.value)}
+                    className="bg-dark-600 border border-dark-400 text-gray-200 text-xs rounded px-2 py-0.5"
+                  >
+                    <option value="pending">Pending</option>
+                    <option value="in_review">In Review</option>
+                    <option value="approved">Approved</option>
+                    <option value="rejected">Rejected</option>
+                  </select>
+                </div>
                 <div className="flex justify-between"><span className="text-gray-400">Status</span>
                   <select
                     value={selectedUser.status}
