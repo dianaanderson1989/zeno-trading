@@ -14,7 +14,7 @@ import { StakingPage } from '@/pages/StakingPage'
 import { SwapPage } from '@/pages/SwapPage'
 import { WalletPage } from '@/pages/WalletPage'
 import { HistoryPage } from '@/pages/HistoryPage'
-import { ProfilePage } from '@/pages/ProfilePage'
+import { AccountPage } from '@/pages/AccountPage'
 import { ReferralPage } from '@/pages/ReferralPage'
 import { AdminPage } from '@/pages/AdminPage'
 
@@ -64,14 +64,14 @@ function AppWithPrices() {
       </Route>
       <Route element={<PrivateRoute><AppLayout /></PrivateRoute>}>
         <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/trade"          element={<TradingPage />} />
-        <Route path="/trade/:symbol"  element={<TradingPage />} />
+        <Route path="/trade"         element={<TradingPage />} />
+        <Route path="/trade/:symbol" element={<TradingPage />} />
         <Route path="/binary"    element={<BinaryPage />} />
         <Route path="/staking"   element={<StakingPage />} />
         <Route path="/swap"      element={<SwapPage />} />
         <Route path="/wallet"    element={<WalletPage />} />
         <Route path="/history"   element={<HistoryPage />} />
-        <Route path="/account"   element={<ProfilePage />} />
+        <Route path="/account"   element={<AccountPage />} />
         <Route path="/referral"  element={<ReferralPage />} />
       </Route>
       <Route path="/admin/*" element={<AdminRoute><AdminPage /></AdminRoute>} />
@@ -83,9 +83,5 @@ function AppWithPrices() {
 
 export default function App() {
   useAuth()
-  return (
-    <BrowserRouter>
-      <AppWithPrices />
-    </BrowserRouter>
-  )
+  return <BrowserRouter><AppWithPrices /></BrowserRouter>
 }
