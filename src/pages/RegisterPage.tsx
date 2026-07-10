@@ -40,13 +40,17 @@ export function RegisterPage() {
 
     // Resolve referrer if code provided
     let referrerId: string | null = null
-    if (data.referral_code) {
-      const { data: referrer } = await supabase
-        .from('users')
-        .select('id')
-        .eq('referral_code', data.referral_code.toUpperCase())
-        .single()
-      if (referrer) referrerId = referrer.id
+    if (data.referral_code?.trim()) {
+      try {
+        const { data: referrer } = await supabase
+          .from('users')
+          .select('id')
+          .eq('referral_code', data.referral_code.trim().toUpperCase())
+          .maybeSingle()
+        if (referrer) referrerId = referrer.id
+      } catch (_) {
+        // Don't block signup if referral lookup fails
+      }
     }
 
     const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -60,7 +64,7 @@ export function RegisterPage() {
       },
     })
 
-    if (authError) { setError(authError.message); setLoading(false); return }
+    if (authError) { setError(authError.message ?? JSON.stringify(authError)); setLoading(false); return }
 
     // Link referral after signup
     if (referrerId && authData.user) {
@@ -79,7 +83,7 @@ export function RegisterPage() {
   return (
     <div>
       <h2 className="text-2xl font-bold text-white mb-2">Create account</h2>
-      <p className="text-gray-400 mb-8">Start with $10,000 paper trading balance</p>
+      <p className="text-gray-400 mb-8">Join Zeno and start trading crypto</p>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div className="grid grid-cols-2 gap-3">

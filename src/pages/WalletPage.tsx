@@ -102,17 +102,30 @@ export function WalletPage() {
   const handleWithdraw = async () => {
     if (!user || !selectedWallet || !amount || !selectedNetwork || !address) return
     setSubmitting(true)
-    const { error } = await supabase.from('withdrawals').insert({
-      user_id: user.id,
-      asset_id: selectedWallet.asset_id,
-      amount: parseFloat(amount),
-      network: selectedNetwork,
-      address,
-      status: 'pending',
+    setMsg('')
+
+    const { data, error } = await supabase.rpc('submit_withdrawal_with_checks', {
+      p_user_id:  user.id,
+      p_asset_id: selectedWallet.asset_id,
+      p_amount:   parseFloat(amount),
+      p_network:  selectedNetwork,
+      p_address:  address,
     })
+
     setSubmitting(false)
+
     if (error) { setMsg('Error: ' + error.message); return }
-    setMsg('✅ Withdrawal request submitted! Closing in 4 seconds...')
+    if (!data.success) {
+      setMsg((data.kyc_required ? '⚠️ ' : 'Error: ') + data.error)
+      return
+    }
+
+    const riskMsg = data.risk_level === 'high'
+      ? ' ⚠️ Flagged for manual review.'
+      : data.risk_level === 'medium' ? ' Will be reviewed shortly.' : ''
+
+    setMsg('✅ Withdrawal submitted!' + riskMsg + ' Closing in 4 seconds...')
+    queryClient.invalidateQueries({ queryKey: ['wallets'] })
     setTimeout(() => { setModal(null); setMsg('') }, 4000)
   }
 

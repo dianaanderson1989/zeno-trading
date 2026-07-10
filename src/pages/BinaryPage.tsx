@@ -8,12 +8,13 @@ import { usePrices } from '@/hooks/usePrices'
 import { formatCurrency, formatNumber, formatDate } from '@/utils/format'
 import type { Asset } from '@/types'
 
-const DURATIONS = [
-  { label: '30s',   seconds: 30,    basePayout: 15, maxStake: 100,  bonus: 0 },
-  { label: '60s',   seconds: 60,    basePayout: 25, maxStake: 500,  bonus: 2 },
-  { label: '90s',   seconds: 90,    basePayout: 35, maxStake: 1000, bonus: 3 },
-  { label: '120s',  seconds: 120,   basePayout: 45, maxStake: 2000, bonus: 5 },
-  { label: '1 Day', seconds: 86400, basePayout: 60, maxStake: 5000, bonus: 8 },
+// Fallback durations if DB not loaded yet
+const DURATION_FALLBACK = [
+  { label: '30s',   seconds: 30,    basePayout: 15, maxStake: 100,   minBalance: 20,     bonus: 0 },
+  { label: '60s',   seconds: 60,    basePayout: 25, maxStake: 500,   minBalance: 5000,   bonus: 2 },
+  { label: '90s',   seconds: 90,    basePayout: 35, maxStake: 1000,  minBalance: 25000,  bonus: 3 },
+  { label: '120s',  seconds: 120,   basePayout: 45, maxStake: 2000,  minBalance: 50000,  bonus: 5 },
+  { label: '1 Day', seconds: 86400, basePayout: 60, maxStake: 5000,  minBalance: 100000, bonus: 8 },
 ]
 
 interface ActiveTrade {
@@ -35,7 +36,7 @@ export function BinaryPage() {
   const queryClient = useQueryClient()
 
   const [selectedSymbol, setSelectedSymbol] = useState('BTC')
-  const [selectedDuration, setSelectedDuration] = useState(DURATIONS[1])
+  const [selectedDuration, setSelectedDuration] = useState(DURATION_FALLBACK[1])
   const [stake, setStake] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -51,6 +52,36 @@ export function BinaryPage() {
     },
     staleTime: Infinity,
   })
+
+  // Fetch tiers from DB (respects admin config)
+  const { data: dbTiers = [] } = useQuery({
+    queryKey: ['binary_tier_config'],
+    queryFn: async () => {
+      const { data } = await supabase.from('binary_tier_config').select('*').eq('is_active', true).order('duration_seconds')
+      return data ?? []
+    },
+    staleTime: 60_000,
+  })
+
+  // Use DB tiers if available, else fallback
+  const DURATIONS = dbTiers.length > 0
+    ? dbTiers.map((t: any) => ({
+        label:      t.duration_label,
+        seconds:    t.duration_seconds,
+        basePayout: Number(t.base_payout_percent),
+        maxStake:   Number(t.max_stake),
+        minBalance: Number(t.min_balance),
+        bonus:      Number(t.high_roller_bonus ?? 0),
+      }))
+    : DURATION_FALLBACK
+
+  // Sync selectedDuration when DB tiers load
+  useEffect(() => {
+    if (DURATIONS.length > 0 && selectedDuration.seconds === DURATION_FALLBACK[1].seconds) {
+      const match = DURATIONS.find(d => d.seconds === selectedDuration.seconds)
+      if (match) setSelectedDuration(match)
+    }
+  }, [dbTiers.length])
 
   const { data: history = [] } = useQuery({
     queryKey: ['binary_history', user?.id],
@@ -224,20 +255,36 @@ export function BinaryPage() {
           <div className="card">
             <p className="text-xs text-gray-400 mb-3">Expiry Duration</p>
             <div className="grid grid-cols-5 gap-2">
-              {DURATIONS.map(d => (
-                <button key={d.seconds} onClick={() => setSelectedDuration(d)}
-                  className={`flex flex-col items-center py-3 px-2 rounded-xl border transition-colors ${
-                    selectedDuration.seconds === d.seconds
-                      ? 'border-brand-500 bg-brand-500/10'
-                      : 'border-dark-500 bg-dark-700 hover:border-dark-400'
-                  }`}>
-                  <span className={`text-sm font-bold ${selectedDuration.seconds === d.seconds ? 'text-brand-400' : 'text-gray-200'}`}>
-                    {d.label}
-                  </span>
-                  <span className="text-xs text-brand-400 mt-1 font-semibold">{d.basePayout}%</span>
-                  {d.bonus > 0 && <span className="text-xs text-yellow-400">+{d.bonus}%*</span>}
-                </button>
-              ))}
+              {DURATIONS.map(d => {
+                const minBal = d.minBalance ?? 0
+                const isLocked = usdtBalance < minBal
+                const isSelected = selectedDuration.seconds === d.seconds
+                return (
+                  <button key={d.seconds}
+                    onClick={() => !isLocked && setSelectedDuration(d)}
+                    disabled={isLocked}
+                    title={isLocked ? `Requires $${minBal.toLocaleString()} balance` : ''}
+                    className={`relative flex flex-col items-center py-3 px-2 rounded-xl border transition-all ${
+                      isLocked
+                        ? 'border-white/[0.04] bg-dark-800 opacity-50 cursor-not-allowed'
+                        : isSelected
+                        ? 'border-neon-green/40 bg-neon-green/10'
+                        : 'border-white/[0.06] bg-dark-800 hover:border-white/10'
+                    }`}>
+                    {isLocked && (
+                      <span className="absolute top-1 right-1 text-[8px] text-slate-500">🔒</span>
+                    )}
+                    <span className={`text-sm font-bold ${isSelected ? 'text-neon-green' : isLocked ? 'text-slate-600' : 'text-slate-200'}`}>
+                      {d.label}
+                    </span>
+                    <span className={`text-xs mt-1 font-semibold ${isLocked ? 'text-slate-600' : 'text-neon-green'}`}>{d.basePayout}%</span>
+                    {d.bonus > 0 && !isLocked && <span className="text-xs text-yellow-400">+{d.bonus}%</span>}
+                    {isLocked && minBal > 0 && (
+                      <span className="text-[9px] text-slate-600 mt-0.5">${(minBal/1000).toFixed(0)}k min</span>
+                    )}
+                  </button>
+                )
+              })}
             </div>
             {selectedDuration.bonus > 0 && (
               <p className="text-xs text-yellow-400 mt-2">
