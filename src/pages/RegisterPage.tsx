@@ -11,7 +11,6 @@ const schema = z.object({
   email: z.string().email('Invalid email'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
   confirm_password: z.string(),
-  referral_code: z.string().optional(),
 }).refine(d => d.password === d.confirm_password, {
   message: 'Passwords do not match',
   path: ['confirm_password'],
@@ -38,22 +37,9 @@ export function RegisterPage() {
     setLoading(true)
     setError('')
 
-    // Resolve referrer if code provided
-    let referrerId: string | null = null
-    if (data.referral_code?.trim()) {
-      try {
-        const { data: referrer } = await supabase
-          .from('users')
-          .select('id')
-          .eq('referral_code', data.referral_code.trim().toUpperCase())
-          .maybeSingle()
-        if (referrer) referrerId = referrer.id
-      } catch (_) {
-        // Don't block signup if referral lookup fails
-      }
-    }
-
-    const { data: authData, error: authError } = await supabase.auth.signUp({
+    // Pass referral code into metadata so the DB trigger handles everything
+    // No separate UPDATE needed — trigger reads referral_code from raw_user_meta_data
+    const { error: authError } = await supabase.auth.signUp({
       email: data.email,
       password: data.password,
       options: {
@@ -65,17 +51,6 @@ export function RegisterPage() {
     })
 
     if (authError) { setError(authError.message ?? JSON.stringify(authError)); setLoading(false); return }
-
-    // Link referral after signup
-    if (referrerId && authData.user) {
-      await supabase.from('users').update({ referred_by: referrerId }).eq('id', authData.user.id)
-      await supabase.from('referrals').insert({
-        referrer_id: referrerId,
-        referred_id: authData.user.id,
-        code: data.referral_code!.toUpperCase(),
-        status: 'pending',
-      })
-    }
 
     navigate('/dashboard')
   }
@@ -115,13 +90,6 @@ export function RegisterPage() {
           <label className="block text-sm font-medium text-gray-300 mb-1.5">Confirm Password</label>
           <input {...register('confirm_password')} type="password" placeholder="••••••••" className="input" />
           {errors.confirm_password && <p className="text-red-400 text-xs mt-1">{errors.confirm_password.message}</p>}
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-300 mb-1.5">
-            Referral Code <span className="text-gray-500 font-normal">(optional)</span>
-          </label>
-          <input {...register('referral_code')} placeholder="e.g. ABC12345" className="input uppercase" />
         </div>
 
         {error && (

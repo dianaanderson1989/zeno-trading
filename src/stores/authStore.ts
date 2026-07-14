@@ -21,12 +21,40 @@ export const useAuthStore = create<AuthState>((set) => ({
   setSession: (session) => set({ session }),
 
   fetchProfile: async (userId: string) => {
-    const { data } = await supabase
+    // Use maybeSingle so missing profile returns null instead of throwing 406
+    const { data, error } = await supabase
       .from('users')
       .select('*')
       .eq('id', userId)
-      .single()
-    if (data) set({ user: data as User })
+      .maybeSingle()
+
+    if (data) {
+      set({ user: data as User })
+      return
+    }
+
+    // Profile missing — auto-repair transparently
+    console.warn('[Auth] Profile missing for', userId, '— attempting repair...')
+    try {
+      const { data: repaired } = await supabase.rpc('repair_user_profile', {
+        p_user_id: userId
+      })
+
+      if (repaired?.success) {
+        console.log('[Auth] Profile repaired:', repaired.action)
+        // Fetch again after repair
+        const { data: profile } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', userId)
+          .maybeSingle()
+        if (profile) set({ user: profile as User })
+      } else {
+        console.error('[Auth] Profile repair failed:', repaired?.error)
+      }
+    } catch (e) {
+      console.error('[Auth] Repair RPC failed:', e)
+    }
   },
 
   signOut: async () => {

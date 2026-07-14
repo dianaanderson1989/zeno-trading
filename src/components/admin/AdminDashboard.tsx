@@ -1,10 +1,20 @@
 import { useQuery } from '@tanstack/react-query'
-import { Users, ArrowDownToLine, ArrowUpFromLine, TrendingUp, AlertCircle } from 'lucide-react'
+import { Users, ArrowDownToLine, ArrowUpFromLine, TrendingUp, AlertCircle, AlertTriangle } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useNavigate } from 'react-router-dom'
 
 export function AdminDashboard() {
   const navigate = useNavigate()
+
+  const { data: orphanCount = 0 } = useQuery({
+    queryKey: ['orphaned_count'],
+    queryFn: async () => {
+      const { data } = await supabase.rpc('get_orphaned_users')
+      return (data ?? []).length
+    },
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  })
 
   const { data: stats, isLoading } = useQuery({
     queryKey: ['admin_stats'],
@@ -63,6 +73,16 @@ export function AdminDashboard() {
       label: 'Total Orders', value: stats?.totalOrders ?? 0,
       sub: 'All time', icon: TrendingUp,
       color: 'text-purple-400', bg: 'bg-purple-500/10', border: 'border-purple-500/20',
+    },
+    {
+      label: 'Orphaned Users', value: orphanCount,
+      sub: orphanCount > 0 ? 'Cannot log in — fix now' : 'All users healthy',
+      icon: AlertTriangle,
+      color: orphanCount > 0 ? 'text-neon-yellow' : 'text-slate-500',
+      bg: orphanCount > 0 ? 'bg-neon-yellow/10' : 'bg-slate-500/10',
+      border: orphanCount > 0 ? 'border-neon-yellow/20' : 'border-slate-500/20',
+      alert: orphanCount > 0,
+      action: orphanCount > 0 ? () => navigate('/admin/orphaned') : undefined,
     },
   ]
 

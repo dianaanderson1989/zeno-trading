@@ -15,7 +15,6 @@ import { SwapPage } from '@/pages/SwapPage'
 import { WalletPage } from '@/pages/WalletPage'
 import { HistoryPage } from '@/pages/HistoryPage'
 import { AccountPage } from '@/pages/AccountPage'
-import { ReferralPage } from '@/pages/ReferralPage'
 import { AdminPage } from '@/pages/AdminPage'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -72,7 +71,6 @@ function AppWithPrices() {
         <Route path="/wallet"    element={<WalletPage />} />
         <Route path="/history"   element={<HistoryPage />} />
         <Route path="/account"   element={<AccountPage />} />
-        <Route path="/referral"  element={<ReferralPage />} />
       </Route>
       <Route path="/admin/*" element={<AdminRoute><AdminPage /></AdminRoute>} />
       <Route path="/" element={<Navigate to="/dashboard" replace />} />

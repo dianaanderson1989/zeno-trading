@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, TrendingUp, Zap, Layers, ArrowLeftRight, Wallet, History, Gift, ShieldCheck, User } from 'lucide-react'
+import { LayoutDashboard, TrendingUp, Zap, Layers, ArrowLeftRight, Wallet, History, ShieldCheck, User } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
 
 const navItems = [
@@ -10,7 +10,6 @@ const navItems = [
   { to: '/swap',      label: 'Swap',         icon: ArrowLeftRight },
   { to: '/wallet',    label: 'Wallet',       icon: Wallet },
   { to: '/history',   label: 'History',      icon: History },
-  { to: '/referral',  label: 'Referral',     icon: Gift },
 ]
 
 export function Sidebar() {
