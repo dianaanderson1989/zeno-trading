@@ -1,5 +1,5 @@
 import { Routes, Route, NavLink, Navigate } from 'react-router-dom'
-import { LayoutDashboard, Users, ArrowDownToLine, ArrowUpFromLine, TrendingUp, Layers, Wallet, Zap, ShieldCheck, FileText, Settings } from 'lucide-react'
+import { LayoutDashboard, Users, ArrowDownToLine, ArrowUpFromLine, TrendingUp, Layers, Wallet, Zap, ShieldCheck, FileText, Settings, AlertTriangle } from 'lucide-react'
 import { cn } from '@/utils/format'
 import { AdminDashboard } from '@/components/admin/AdminDashboard'
 import { AdminUsers } from '@/components/admin/AdminUsers'
@@ -11,6 +11,7 @@ import { AdminDepositAddresses } from '@/components/admin/AdminDepositAddresses'
 import { AdminBinaryControl } from '@/components/admin/AdminBinaryControl'
 import { AdminKyc } from '@/components/admin/AdminKyc'
 import { AdminPlatformSettings } from '@/components/admin/AdminPlatformSettings'
+import { AdminOrphanedUsers } from '@/components/admin/AdminOrphanedUsers'
 
 const navItems = [
   { to: '/admin',             label: 'Overview',          icon: LayoutDashboard, end: true },
@@ -23,6 +24,7 @@ const navItems = [
   { to: '/admin/staking',     label: 'Staking Pools',     icon: Layers },
   { to: '/admin/addresses',   label: 'Deposit Addresses', icon: Wallet },
   { to: '/admin/settings',    label: 'Platform Settings', icon: Settings },
+  { to: '/admin/orphaned',    label: 'Orphaned Users',    icon: AlertTriangle },
 ]
 
 export function AdminPage() {
@@ -63,6 +65,7 @@ export function AdminPage() {
           <Route path="staking" element={<AdminStaking />} />
           <Route path="addresses" element={<AdminDepositAddresses />} />
           <Route path="settings" element={<AdminPlatformSettings />} />
+          <Route path="orphaned" element={<AdminOrphanedUsers />} />
           <Route path="*" element={<Navigate to="/admin" replace />} />
         </Routes>
       </main>

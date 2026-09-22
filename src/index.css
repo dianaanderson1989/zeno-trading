@@ -5,6 +5,11 @@
 @layer base {
   * { box-sizing: border-box; }
 
+  /* iOS safe area support */
+  :root {
+    --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
   body {
     @apply font-sans antialiased;
     background: #050810;
@@ -19,6 +24,19 @@
 
   input[type=number]::-webkit-inner-spin-button,
   input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
+}
+
+@layer utilities {
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+  .pb-safe {
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
+  }
 }
 
 @layer components {

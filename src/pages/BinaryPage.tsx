@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { TrendingUp, TrendingDown, Clock, Trophy, XCircle, Zap } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { BinaryReceipt } from '@/components/BinaryReceipt'
 import { useAuthStore } from '@/stores/authStore'
 import { useWallets } from '@/hooks/useWallets'
 import { usePrices } from '@/hooks/usePrices'
@@ -42,6 +43,9 @@ export function BinaryPage() {
   const [error, setError] = useState('')
   const [activeTrades, setActiveTrades] = useState<ActiveTrade[]>([])
   const [countdowns, setCountdowns] = useState<Record<string, number>>({})
+  const [selectedTrade, setSelectedTrade] = useState<any | null>(null)
+  const [resolvedTrade, setResolvedTrade] = useState<any | null>(null)
+  const [resolvedTradeTimer, setResolvedTradeTimer] = useState<ReturnType<typeof setTimeout> | null>(null)
   const timersRef = useRef<Record<string, ReturnType<typeof setInterval>>>({})
 
   const { data: assets = [] } = useQuery({
@@ -144,6 +148,15 @@ export function BinaryPage() {
           queryClient.invalidateQueries({ queryKey: ['wallets'] })
           queryClient.invalidateQueries({ queryKey: ['binary_history'] })
           queryClient.invalidateQueries({ queryKey: ['transactions'] })
+          // Show resolved trade receipt for 30s
+          const { data: resolved } = await supabase
+            .from('binary_options').select('*, assets(*)')
+            .eq('id', trade.id).single()
+          if (resolved) {
+            setResolvedTrade(resolved)
+            const t = setTimeout(() => setResolvedTrade(null), 30000)
+            setResolvedTradeTimer(t)
+          }
         }, 1500) as any
       }
     })
@@ -208,7 +221,7 @@ export function BinaryPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
         {/* Left: asset + duration + trade form */}
         <div className="lg:col-span-2 space-y-4">
           {/* Asset selector */}
@@ -254,7 +267,8 @@ export function BinaryPage() {
           {/* Duration selector */}
           <div className="card">
             <p className="text-xs text-gray-400 mb-3">Expiry Duration</p>
-            <div className="grid grid-cols-5 gap-2">
+            {/* Duration picker — horizontal scroll on mobile, grid on desktop */}
+            <div className="flex gap-2 overflow-x-auto pb-1 lg:grid lg:grid-cols-5 lg:overflow-visible scrollbar-none">
               {DURATIONS.map(d => {
                 const minBal = d.minBalance ?? 0
                 const isLocked = usdtBalance < minBal
@@ -264,7 +278,7 @@ export function BinaryPage() {
                     onClick={() => !isLocked && setSelectedDuration(d)}
                     disabled={isLocked}
                     title={isLocked ? `Requires $${minBal.toLocaleString()} balance` : ''}
-                    className={`relative flex flex-col items-center py-3 px-2 rounded-xl border transition-all ${
+                    className={`relative flex flex-col items-center py-3 px-3 rounded-xl border transition-all flex-shrink-0 min-w-[72px] lg:min-w-0 ${
                       isLocked
                         ? 'border-white/[0.04] bg-dark-800 opacity-50 cursor-not-allowed'
                         : isSelected
@@ -278,7 +292,7 @@ export function BinaryPage() {
                       {d.label}
                     </span>
                     <span className={`text-xs mt-1 font-semibold ${isLocked ? 'text-slate-600' : 'text-neon-green'}`}>{d.basePayout}%</span>
-                    {d.bonus > 0 && !isLocked && <span className="text-xs text-yellow-400">+{d.bonus}%</span>}
+                    {d.bonus > 0 && !isLocked && <span className="text-[10px] text-yellow-400">+{d.bonus}%</span>}
                     {isLocked && minBal > 0 && (
                       <span className="text-[9px] text-slate-600 mt-0.5">${(minBal/1000).toFixed(0)}k min</span>
                     )}
@@ -303,7 +317,7 @@ export function BinaryPage() {
                 const currentP = Object.values(prices).find(p => p.asset_id === trade.assetId)?.price ?? trade.entryPrice
                 const isWinning = trade.direction === 'up' ? currentP > trade.entryPrice : currentP < trade.entryPrice
                 return (
-                  <div key={trade.id} className={`card border ${isWinning ? 'border-brand-500/40' : 'border-red-500/40'}`}>
+                  <div key={trade.id} className={`card border border-yellow-500/30 bg-yellow-500/[0.03]`}>
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
                         <span className={`badge ${trade.direction === 'up' ? 'bg-brand-500/15 text-brand-400' : 'bg-red-500/15 text-red-400'}`}>
@@ -313,14 +327,14 @@ export function BinaryPage() {
                       </div>
                       <div className="flex items-center gap-1 text-sm font-mono">
                         <Clock size={13} className="text-gray-400" />
-                        <span className={secs <= 10 ? 'text-red-400 font-bold' : 'text-gray-200'}>
+                        <span className={secs <= 5 ? 'text-neon-red font-bold animate-pulse' : secs <= 15 ? 'text-yellow-400 font-bold' : 'text-slate-200'}>
                           {formatCountdown(secs)}
                         </span>
                       </div>
                     </div>
                     <div className="w-full bg-dark-600 rounded-full h-1.5 mb-2">
                       <div
-                        className={`h-1.5 rounded-full transition-all ${isWinning ? 'bg-brand-500' : 'bg-red-500'}`}
+                        className="h-1.5 rounded-full transition-all bg-yellow-400" 
                         style={{ width: `${pct}%` }}
                       />
                     </div>
@@ -448,7 +462,8 @@ export function BinaryPage() {
                     ? t.payout_amount - t.stake_amount
                     : -t.stake_amount
                   return (
-                    <tr key={t.id} className="hover:bg-dark-700/40">
+                    <tr key={t.id} onClick={() => setSelectedTrade(t)}
+                      className="hover:bg-neon-green/5 cursor-pointer transition-colors border-b border-white/[0.04] last:border-0">
                       <td className="py-2.5 flex items-center gap-2">
                         {t.assets?.icon_url && <img src={t.assets.icon_url} alt="" className="w-5 h-5 rounded-full" />}
                         <span className="text-gray-200">{t.assets?.symbol}</span>
